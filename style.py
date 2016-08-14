@@ -88,11 +88,11 @@ parser = argparse.ArgumentParser(description="Transfer the style of one image to
 parser.add_argument("-s", "--style-img", type=str, required=True, help="input style (art) image")
 parser.add_argument("-c", "--content-img", type=str, required=True, help="input content image")
 parser.add_argument("-g", "--gpu-id", default=0, type=int, required=False, help="GPU device number")
-parser.add_argument("-m", "--model", default="vgg16", type=str, required=False, help="model to use")
+parser.add_argument("-m", "--model", default="vgg19", type=str, required=False, help="model to use")
 parser.add_argument("-i", "--init", default="content", type=str, required=False, help="initialization strategy")
 parser.add_argument("-r", "--ratio", default="1e4", type=str, required=False, help="style-to-content ratio")
 parser.add_argument("-n", "--num-iters", default=512, type=int, required=False, help="L-BFGS iterations")
-parser.add_argument("-l", "--length", default=512, type=float, required=False, help="maximum image length")
+parser.add_argument("-l", "--length", default=320, type=float, required=False, help="maximum image length")
 parser.add_argument("-v", "--verbose", action="store_true", required=False, help="print minimization outputs")
 parser.add_argument("-o", "--output", default=None, required=False, help="output path")
 
@@ -330,7 +330,7 @@ class StyleTransfer(object):
         data = self.net.blobs["data"].data
         img_out = self.transformer.deprocess("data", data)
         return img_out
-    
+
     def _rescale_net(self, img):
         """
             Rescales the network to fit a particular image.
@@ -376,11 +376,13 @@ class StyleTransfer(object):
         """
 
         self.grad_iter = 0
-        self.pbar = pb.ProgressBar()
-        self.pbar.widgets = ["Optimizing: ", pb.Percentage(), 
-                             " ", pb.Bar(marker=pb.AnimatedMarker()),
-                             " ", pb.ETA()]
-        self.pbar.maxval = max_iter
+        self.pbar = pb.ProgressBar(widgets = ["Optimizing: ", pb.Percentage(),
+                             " ", pb.Bar(),
+                             " ", pb.ETA()],maxval = max_iter)
+        # self.pbar.widgets = ["Optimizing: ", pb.Percentage(),
+        #                      " ", pb.Bar(marker=pb.AnimatedMarker()),
+        #                      " ", pb.ETA()]
+        # self.pbar.maxval = max_iter
 
     def transfer_style(self, img_style, img_content, length=512, ratio=1e5,
                        n_iter=512, init="-1", verbose=False, callback=None):
@@ -437,9 +439,9 @@ class StyleTransfer(object):
         # compute data bounds
         data_min = -self.transformer.mean["data"][:,0,0]
         data_max = data_min + self.transformer.raw_scale["data"]
-        data_bounds = [(data_min[0], data_max[0])]*(img0.size/3) + \
-                      [(data_min[1], data_max[1])]*(img0.size/3) + \
-                      [(data_min[2], data_max[2])]*(img0.size/3)
+        data_bounds = [(data_min[0], data_max[0])]*int(img0.size/3) + \
+                      [(data_min[1], data_max[1])]*int(img0.size/3) + \
+                      [(data_min[2], data_max[2])]*int(img0.size/3)
 
         # optimization params
         grad_method = "L-BFGS-B"
@@ -486,7 +488,7 @@ def main(args):
     img_style = caffe.io.load_image(args.style_img)
     img_content = caffe.io.load_image(args.content_img)
     logging.info("Successfully loaded images.")
-    
+
     # artistic style class
     use_pbar = not args.verbose
     st = StyleTransfer(args.model.lower(), use_pbar=use_pbar)
@@ -494,8 +496,8 @@ def main(args):
 
     # perform style transfer
     start = timeit.default_timer()
-    n_iters = st.transfer_style(img_style, img_content, length=args.length, 
-                                init=args.init, ratio=np.float(args.ratio), 
+    n_iters = st.transfer_style(img_style, img_content, length=args.length,
+                                init=args.init, ratio=np.float(args.ratio),
                                 n_iter=args.num_iters, verbose=args.verbose)
     end = timeit.default_timer()
     logging.info("Ran {0} iterations in {1:.0f}s.".format(n_iters, end-start))
@@ -505,8 +507,8 @@ def main(args):
     if args.output is not None:
         out_path = args.output
     else:
-        out_path_fmt = (os.path.splitext(os.path.split(args.content_img)[1])[0], 
-                        os.path.splitext(os.path.split(args.style_img)[1])[0], 
+        out_path_fmt = (os.path.splitext(os.path.split(args.content_img)[1])[0],
+                        os.path.splitext(os.path.split(args.style_img)[1])[0],
                         args.model, args.init, args.ratio, args.num_iters)
         out_path = "outputs/{0}-{1}-{2}-{3}-{4}-{5}.jpg".format(*out_path_fmt)
 
@@ -518,4 +520,3 @@ def main(args):
 if __name__ == "__main__":
     args = parser.parse_args()
     main(args)
-
